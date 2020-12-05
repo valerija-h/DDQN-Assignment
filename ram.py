@@ -7,9 +7,6 @@ import matplotlib.pyplot as plt
 import gym
 import numpy as np
 import random
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Conv2D, Flatten
-from keras.optimizers import Adam
 from collections import deque
 
 """
@@ -29,6 +26,41 @@ next_obs, reward, done, info = env.step(0)
 print('Info: {}'.format(info))
 
 """
+PRIORITIZED REPLAY
+"""
+class PrioritizedReplayBuffer():
+    def __init__(self, maxlen):
+        self.buffer = deque(maxlen=maxlen)
+        self.priorities = deque(maxlen=maxlen)
+
+    # A new experience is given the maximum priority
+    def add(self, experience):
+        self.buffer.append(experience)
+        self.priorities.append(max(self.priorities, default=1.0))
+
+    def get_probabilities(self, priority_scale):
+        scaled_priorities = np.array(self.priorities) ** priority_scale
+        sample_probabilities = scaled_priorities / sum(scaled_priorities)
+        return sample_probabilities
+
+    def get_importance(self, probabilities):
+        importance = 1 / (len(self.buffer) * probabilities)
+        importance_normalized = importance / max(importance)
+        return importance_normalized
+
+    def sample(self, batch_size, priority_scale=1.0):
+        sample_size = min(len(self.buffer), batch_size)
+        sample_probs = self.get_probabilities(priority_scale)
+        sample_indices = random.choices(range(len(self.buffer)), k=sample_size, weights=sample_probs)
+        samples = np.array(self.buffer)[sample_indices]
+        importance = self.get_importance(sample_probs[sample_indices])
+        return map(list, zip(*samples)), importance, sample_indices
+
+    def set_priorities(self, indices, errors, offset=0.001):
+        for i, e in zip(indices, errors):
+            self.priorities[i] = abs(e) + offset
+
+"""
 CREATING THE AGENT
 """
 class QLearningAgent():
@@ -38,8 +70,11 @@ class QLearningAgent():
         self.discount_rate = 0.99
         self.checkpoint_path = "./pixel_seaquest_ram.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
-        self.max_epsilon = 0.999
+        self.epsilon = 1.0
+        self.epsilon_decay = 0.995
         self.loss_val = np.infty  # initialize loss_val
+        self.error_val = np.infty
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=1000)  # exerience buffe
 
         tf.reset_default_graph()
         tf.disable_eager_execution()
@@ -59,19 +94,13 @@ class QLearningAgent():
         with tf.variable_scope("train"):
             # variables for actions (X_action) and target values (y)
             self.X_action = tf.placeholder(tf.int32, shape=[None])
-            self.y = tf.placeholder(tf.float32, shape=[None, 1])
+            self.y = tf.placeholder(tf.float32, shape=[None])
+            self.importance = tf.placeholder(tf.float32, shape=[None])
 
-            # TODO - QnA session - vector q values * one hot encoding and obtain ???
-            self.q_value = tf.reduce_sum(self.main_q_values * tf.one_hot(self.X_action, self.action_size),
-                                         axis=1, keepdims=True)
+            self.q_value = tf.reduce_sum(self.main_q_values * tf.one_hot(self.X_action, self.action_size), axis=1)
 
-            # used to make the target of q table close to real value
-            # usually we just square loss but if we square it on its own, it will explode, so instead we will multiply loss by 2 which is above 1
-            self.error = tf.abs(self.y - self.q_value)
-            self.clipped_error = tf.clip_by_value(self.error, 0.0, 1.0)  # clip the value, if it is above 1 it stays at 1
-            self.linear_error = 2 * (self.error - self.clipped_error)  # avoid exploding losses
-            self.loss = tf.reduce_mean(tf.square(self.clipped_error) + self.linear_error)
-            # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
+            self.error = self.y - self.q_value
+            self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
 
             # global step to remember the number of times the optimizer was used
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -108,60 +137,63 @@ class QLearningAgent():
     """ ------- CHOOSING AN ACTION -------"""
     def get_action(self, state):
         q_values = self.main_q_values.eval(feed_dict={self.X_state: [state]})
-        epsilon = max(self.min_epsilon, self.max_epsilon * self.global_step.eval())  # slowly decrease epsilon based on experience (global_step)
+        self.epsilon = max(self.min_epsilon, self.epsilon*self.epsilon_decay)  # slowly decrease epsilon
 
-        if np.random.rand() < epsilon:
+        if np.random.rand() < self.epsilon:
             return np.random.randint(self.action_size)  # choose random action
         else:
             return np.argmax(q_values)  # optimal action
 
     """ ------- TRAINING -------"""
-    def train(self, state, action, reward, next_state, done):
+    def train(self, experience, batch_size=32, priority_scale=0.0):
+        self.replay_buffer.add(experience)  # add experience to buffer
+
+        # extract an experience batch from the buffer
+        (state, action, next_state, reward, done), importance, indices = self.replay_buffer.sample(batch_size, priority_scale=priority_scale)
+
         # compute q values of next state
-        next_q_values = self.target_q_values.eval(feed_dict={self.X_state: np.array([next_state])})
-        max_next_q_values = np.max(next_q_values, axis=1, keepdims=True)  # get q values with best rewards
+        next_q_values = self.target_q_values.eval(feed_dict={self.X_state: np.array(next_state)})
+        next_q_values[done] = np.zeros([self.action_size])  # set to 0 if done = true
 
         # compute target values
-        y_val = reward + (done * (self.discount_rate * max_next_q_values))
-        # if done is true (0), if he loses, y_val = only reward
+        y_val = reward + self.discount_rate * np.max(next_q_values)
 
         # train the main network
-        _, self.loss_val = self.sess.run([self.training_op, self.loss], feed_dict={self.X_state: np.array([state]),
-                                                                                   self.X_action: np.array([action]),
-                                                                                   self.y: y_val})
+        feed = {self.X_state: np.array(state), self.X_action: np.array(action), self.y: y_val, self.importance: importance}
+        _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.error], feed_dict=feed)
+        self.replay_buffer.set_priorities(indices, self.error_val)
+
 
 agent = QLearningAgent(env)
-train_steps = 10000  # total number of training steps in an episode
-episodes = 1000  # number of episodes
+episodes = 10000  # number of episodes
+list_rewards = []
+total_reward = 0  # reward per episode
 copy_steps = 500  # update target network (from main network) every n steps
-save_steps = 1000  # save model every n steps
+save_steps = 1000  # save model every n ste
 
 with agent.sess:
     for e in range(episodes):
         state = env.reset()
         done = False
-        for t in range(train_steps):
-
+        list_rewards.append(total_reward)
+        total_reward = 0
+        while not done:
+            step = agent.global_step.eval()
             action = agent.get_action(state)
             next_state, reward, done, info = env.step(action)
             next_state = next_state
 
-            agent.train(state, action, reward, next_state, 1.0 - done)  # pass in inverse of done
+            agent.train((state, action, next_state, reward, done), priority_scale=0.8)
             env.render()
-
             state = next_state
+            total_reward += reward
 
-            # display training progress
-            print("\r\tEpisode {}/{}\tStep {}/{} ({:.1f})%\tLoss {:5f}".format(e+1, episodes,
-                                                                               t, train_steps, t*100/train_steps,
-                                                                               agent.loss_val))
-            # go to next episode
-            if done: break
+            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e+1, episodes, step, total_reward, agent.loss_val))
 
-            # regulary update target DQN - every few steps
-            if t % copy_steps == 0:
+            # regulary update target DQN - every n steps
+            if step % copy_steps == 0:
                 agent.copy_online_to_target.run()
 
-            # save model regularly - every few steps
-            if t % save_steps == 0:
+            # save model regularly - every n steps
+            if step % save_steps == 0:
                 agent.saver.save(agent.sess, agent.checkpoint_path)
