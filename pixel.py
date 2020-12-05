@@ -118,10 +118,12 @@ class QLearningAgent():
 
             # used to make the target of q table close to real value
             # usually we just square loss but if we square it on its own, it will explode, so instead we will multiply loss by 2 which is above 1
-            self.error = tf.abs(self.y - self.q_value)
-            self.clipped_error = tf.clip_by_value(self.error, 0.0, 1.0)  # clip the value, if it is above 1 it stays at 1
-            self.linear_error = 2 * (self.error - self.clipped_error)  # avoid exploding losses
-            self.loss = tf.reduce_mean(tf.multiply((tf.square(self.clipped_error) + self.linear_error), self.importance))
+            # self.error = tf.abs(self.y - self.q_value)
+            # self.clipped_error = tf.clip_by_value(self.error, 0.0, 1.0)  # clip the value, if it is above 1 it stays at 1
+            # self.linear_error = 2 * (self.error - self.clipped_error)  # avoid exploding losses
+            # self.loss = tf.reduce_mean(tf.multiply((tf.square(self.clipped_error) + self.linear_error), self.importance))
+            self.error = self.y - self.q_value
+            self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
             # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
 
             # global step to remember the number of times the optimizer was used
@@ -190,8 +192,7 @@ class QLearningAgent():
         # train the main network
         importance = (importance**(1-self.epsilon)).reshape((importance.shape[0],))
         feed = {self.X_state: np.array(state), self.X_action: np.array(action), self.y: y_val, self.importance: importance}
-        _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.linear_error], feed_dict=feed)
-        print(self.error_val)
+        _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.error], feed_dict=feed)
         self.replay_buffer.set_priorities(indices, self.error_val)
 
 agent = QLearningAgent(env)
