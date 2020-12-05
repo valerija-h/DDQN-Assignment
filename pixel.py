@@ -7,6 +7,8 @@ from collections import deque
 from IPython.display import clear_output
 import random
 import time
+# please note the code in the agent class was adapated from tutorial material
+# please note the prioritized replay was adapted from class material
 
 """
 LOADING AND OBSERVING THE ENVIRONMENT
@@ -39,19 +41,57 @@ plt.imshow(prep_obs(obs).reshape(96,80), cmap='gray', vmin=0, vmax=255)
 plt.show()
 
 """
+PRIORITIZED REPLAY
+"""
+class PrioritizedReplayBuffer():
+    def __init__(self, maxlen):
+        self.buffer = deque(maxlen=maxlen)
+        self.priorities = deque(maxlen=maxlen)
+
+    # A new experience is given the maximum priority
+    def add(self, experience):
+        self.buffer.append(experience)
+        self.priorities.append(max(self.priorities, default=1.0))
+
+    def get_probabilities(self, priority_scale):
+        scaled_priorities = np.array(self.priorities) ** priority_scale
+        sample_probabilities = scaled_priorities / sum(scaled_priorities)
+        return sample_probabilities
+
+    def get_importance(self, probabilities):
+        importance = 1 / (len(self.buffer) * probabilities)
+        importance_normalized = importance / max(importance)
+        return importance_normalized
+
+    def sample(self, batch_size, priority_scale=1.0):
+        sample_size = min(len(self.buffer), batch_size)
+        sample_probs = self.get_probabilities(priority_scale)
+        sample_indices = random.choices(range(len(self.buffer)), k=sample_size, weights=sample_probs)
+        samples = np.array(self.buffer)[sample_indices]
+        importance = self.get_importance(sample_probs[sample_indices])
+        return map(list, zip(*samples)), importance, sample_indices
+
+    def set_priorities(self, indices, errors, offset=0.001):
+        for i, e in zip(indices, errors):
+            self.priorities[i] = abs(e) + offset
+
+
+"""
 CREATING THE AGENT
 """
 class QLearningAgent():
     def __init__(self, env):
         self.action_size = env.action_space.n
         self.observation_size = (96, 80, 1)
-        self.learning_rate = 0.001 # higher for experience replay
+        self.learning_rate = 0.001  # higher for experience replay
         self.discount_rate = 0.99
         self.checkpoint_path = "./pixel_seaquest_test.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
-        self.max_epsilon = 0.999
+        self.epsilon = 1.0
+        self.epsilon_decay = 0.995
         self.loss_val = np.infty  # initialize loss_val
-        self.replay_buffer = deque(maxlen=1000)  # exerience buffe
+        self.error_val = np.infty
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=1000)  # exerience buffe
 
         tf.reset_default_graph()
         tf.disable_eager_execution()
@@ -72,17 +112,16 @@ class QLearningAgent():
             # variables for actions (X_action) and target values (y)
             self.X_action = tf.placeholder(tf.int32, shape=[None])
             self.y = tf.placeholder(tf.float32, shape=[None])
+            self.importance = tf.placeholder(tf.float32, shape=[None])
 
-            # TODO - QnA session - vector q values * one hot encoding and obtain ???
-            self.q_value = tf.reduce_sum(self.main_q_values * tf.one_hot(self.X_action, self.action_size),
-                                         axis=1, keepdims=True)
+            self.q_value = tf.reduce_sum(self.main_q_values * tf.one_hot(self.X_action, self.action_size), axis=1)
 
             # used to make the target of q table close to real value
             # usually we just square loss but if we square it on its own, it will explode, so instead we will multiply loss by 2 which is above 1
             self.error = tf.abs(self.y - self.q_value)
             self.clipped_error = tf.clip_by_value(self.error, 0.0, 1.0)  # clip the value, if it is above 1 it stays at 1
             self.linear_error = 2 * (self.error - self.clipped_error)  # avoid exploding losses
-            self.loss = tf.reduce_mean(tf.square(self.clipped_error) + self.linear_error)
+            self.loss = tf.reduce_mean(tf.multiply((tf.square(self.clipped_error) + self.linear_error), self.importance))
             # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
 
             # global step to remember the number of times the optimizer was used
@@ -126,20 +165,20 @@ class QLearningAgent():
     """ ------- CHOOSING AN ACTION -------"""
     def get_action(self, state):
         q_values = self.main_q_values.eval(feed_dict={self.X_state: [state]})
-        epsilon = max(self.min_epsilon, self.max_epsilon * self.global_step.eval())  # slowly decrease epsilon based on experience (global_step)
 
-        if np.random.rand() < epsilon:
+        self.epsilon = max(self.min_epsilon, self.epsilon*self.epsilon_decay)  # slowly decrease epsilon
+
+        if np.random.rand() < self.epsilon:
             return np.random.randint(self.action_size)  # choose random action
         else:
             return np.argmax(q_values)  # optimal action
 
     """ ------- TRAINING -------"""
-    def train(self, experience, batch_size=32):
-        self.replay_buffer.append(experience)  # add experience to buffer
+    def train(self, experience, batch_size=32, priority_scale=0.0):
+        self.replay_buffer.add(experience)  # add experience to buffer
 
         # extract an experience batch from the buffer
-        samples = random.choices(self.replay_buffer, k=batch_size)
-        state, action, next_state, reward, done = (list(col) for col in zip(experience, *samples))
+        (state, action, next_state, reward, done), importance, indices = self.replay_buffer.sample(batch_size, priority_scale=priority_scale)
 
         # compute q values of next state
         next_q_values = self.target_q_values.eval(feed_dict={self.X_state: np.array(next_state)})
@@ -149,10 +188,11 @@ class QLearningAgent():
         y_val = reward + self.discount_rate * np.max(next_q_values)
 
         # train the main network
-        _, self.loss_val = self.sess.run([self.training_op, self.loss], feed_dict={self.X_state: np.array(state),
-                                                                                   self.X_action: np.array(action),
-                                                                                   self.y: y_val})
-
+        importance = (importance**(1-self.epsilon)).reshape((importance.shape[0],))
+        feed = {self.X_state: np.array(state), self.X_action: np.array(action), self.y: y_val, self.importance: importance}
+        _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.linear_error], feed_dict=feed)
+        print(self.error_val)
+        self.replay_buffer.set_priorities(indices, self.error_val)
 
 agent = QLearningAgent(env)
 episodes = 10000  # number of episodes
@@ -173,7 +213,7 @@ with agent.sess:
             next_state, reward, done, info = env.step(action)
             next_state = prep_obs(next_state)
 
-            agent.train((state, action, next_state, reward, done))  # pass in inverse of done
+            agent.train((state, action, next_state, reward, done), priority_scale=0.8)
             env.render()
             state = next_state
             total_reward += reward
