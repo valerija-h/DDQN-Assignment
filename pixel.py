@@ -7,6 +7,7 @@ from collections import deque
 from IPython.display import clear_output
 import random
 import time
+import pickle
 # please note the code in the agent class was adapated from tutorial material
 # please note the prioritized replay was adapted from class material
 
@@ -35,10 +36,10 @@ def prep_obs(obs):
     return img.reshape(96, 80, 1)
 
 obs = env.reset()
-plt.imshow(obs)
-plt.show()
-plt.imshow(prep_obs(obs).reshape(96,80), cmap='gray', vmin=0, vmax=255)
-plt.show()
+# plt.imshow(obs)
+# plt.show()
+# plt.imshow(prep_obs(obs).reshape(96,80), cmap='gray', vmin=0, vmax=255)
+# plt.show()
 
 """
 PRIORITIZED REPLAY
@@ -83,7 +84,7 @@ class QLearningAgent():
     def __init__(self, env):
         self.action_size = env.action_space.n
         self.observation_size = (96, 80, 1)
-        self.learning_rate = 0.001  # higher for experience replay
+        self.learning_rate = 0.00025  # higher for experience replay
         self.discount_rate = 0.99
         self.checkpoint_path = "./pixel_seaquest_test.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
@@ -91,7 +92,7 @@ class QLearningAgent():
         self.epsilon_decay = 0.995
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
-        self.replay_buffer = PrioritizedReplayBuffer(maxlen=1000)  # exerience buffe
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=5000)  # exerience buffer
 
         tf.reset_default_graph()
         tf.disable_eager_execution()
@@ -196,11 +197,14 @@ class QLearningAgent():
         self.replay_buffer.set_priorities(indices, self.error_val)
 
 agent = QLearningAgent(env)
-episodes = 10000  # number of episodes
-list_rewards = []
+episodes = 50  # number of episodes
+if os.path.isfile("pixel_seaquest_test.p"):
+    list_rewards = []
+else:
+    list_rewards = pickle.load(open("pixel_seaquest_test.p", "rb"))
 total_reward = 0  # reward per episode
 copy_steps = 500  # update target network (from main network) every n steps
-save_steps = 1000  # save model every n ste
+save_steps = 1000  # save model every n steps
 
 with agent.sess:
     for e in range(episodes):
@@ -219,8 +223,6 @@ with agent.sess:
             state = next_state
             total_reward += reward
 
-            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e+1, episodes, step, total_reward, agent.loss_val))
-
             time.sleep(0.01)
             clear_output(wait=True)
 
@@ -231,3 +233,10 @@ with agent.sess:
             # save model regularly - every n steps
             if step % save_steps == 0:
                 agent.saver.save(agent.sess, agent.checkpoint_path)
+
+        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
+                                                                                  agent.loss_val))
+
+    pickle.dump(list_rewards, open("pixel_seaquest_test.p", "wb"))
+    plt.plot(list_rewards)
+    plt.show()
