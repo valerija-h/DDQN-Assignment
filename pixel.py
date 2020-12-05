@@ -117,11 +117,6 @@ class QLearningAgent():
             self.q_value = tf.reduce_sum(self.main_q_values * tf.one_hot(self.X_action, self.action_size), axis=1)
 
             # used to make the target of q table close to real value
-            # usually we just square loss but if we square it on its own, it will explode, so instead we will multiply loss by 2 which is above 1
-            # self.error = tf.abs(self.y - self.q_value)
-            # self.clipped_error = tf.clip_by_value(self.error, 0.0, 1.0)  # clip the value, if it is above 1 it stays at 1
-            # self.linear_error = 2 * (self.error - self.clipped_error)  # avoid exploding losses
-            # self.loss = tf.reduce_mean(tf.multiply((tf.square(self.clipped_error) + self.linear_error), self.importance))
             self.error = self.y - self.q_value
             self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
             # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
@@ -220,8 +215,6 @@ with agent.sess:
             total_reward += reward
 
             print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e+1, episodes, step, total_reward, agent.loss_val))
-
-            time.sleep(0.01)
             clear_output(wait=True)
 
             # regulary update target DQN - every n steps
