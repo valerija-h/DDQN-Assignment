@@ -86,7 +86,7 @@ class QLearningAgent():
         self.observation_size = (96, 80, 1)
         self.learning_rate = 0.00025  # higher for experience replay
         self.discount_rate = 0.99
-        self.checkpoint_path = "./pixel_seaquest_test.ckpt"  # where to save model checkpoints
+        self.checkpoint_path = "./checkpoints/pixel/seaquest_pixel.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
         self.epsilon = 1.0
         self.epsilon_decay = 0.995
