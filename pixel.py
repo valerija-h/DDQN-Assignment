@@ -85,14 +85,14 @@ class QLearningAgent():
         self.action_size = env.action_space.n
         self.observation_size = (96, 80, 1)
         self.learning_rate = 0.00025  # higher for experience replay
-        self.discount_rate = 0.99
+        self.discount_rate = 0.95
         self.checkpoint_path = "./checkpoints/pixel/seaquest_pixel.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
         self.epsilon = self.max_epsilon = 1.0
-        self.final_exploration_frame = 5000
+        self.final_exploration_frame = 100000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
-        self.replay_buffer = PrioritizedReplayBuffer(maxlen=5000)  # exerience buffer
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffer
         self.tau = 0.05
 
         tf.reset_default_graph()
@@ -196,11 +196,12 @@ class QLearningAgent():
         print(self.loss_val)
         self.replay_buffer.set_priorities(indices, self.error_val)
 
+
 agent = QLearningAgent(env)
-episodes = 100  # number of episodes
+episodes = 1000  # number of episodes
 list_rewards = []
 total_reward = 0  # reward per episode
-copy_steps = 500  # update target network (from main network) every n steps
+copy_steps = 1000  # update target network (from main network) every n steps
 save_steps = 1000  # save model every n steps
 
 with agent.sess:
@@ -222,8 +223,6 @@ with agent.sess:
             env.render()
             state = next_state
             total_reward += reward
-
-            clear_output(wait=True)
 
             # regulary update target DQN - every n steps
             if step % copy_steps == 0:

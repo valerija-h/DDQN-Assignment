@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import gym
 import numpy as np
 import random
+import pickle
 from collections import deque
 
 """
@@ -66,15 +67,15 @@ CREATING THE AGENT
 class QLearningAgent():
     def __init__(self, env):
         self.action_size = env.action_space.n
-        self.learning_rate = 0.001
-        self.discount_rate = 0.99
+        self.learning_rate = 0.00025
+        self.discount_rate = 0.95
         self.checkpoint_path = "./checkpoints/ram/seaquest_ram.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
         self.epsilon = self.max_epsilon = 1.0
-        self.final_exploration_frame = 5000
+        self.final_exploration_frame = 100000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
-        self.replay_buffer = PrioritizedReplayBuffer(maxlen=1000)  # exerience buffe
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffe
         self.tau = 0.05
 
         tf.reset_default_graph()
@@ -171,7 +172,7 @@ class QLearningAgent():
 
 
 agent = QLearningAgent(env)
-episodes = 10000  # number of episodes
+episodes = 1000  # number of episodes
 list_rewards = []
 total_reward = 0  # reward per episode
 copy_steps = 500  # update target network (from main network) every n steps
@@ -195,8 +196,6 @@ with agent.sess:
             state = next_state
             total_reward += reward
 
-            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e+1, episodes, step, total_reward, agent.loss_val))
-
             # regulary update target DQN - every n steps
             if step % copy_steps == 0:
                 agent.copy_online_to_target.run()
@@ -204,3 +203,10 @@ with agent.sess:
             # save model regularly - every n steps
             if step % save_steps == 0:
                 agent.saver.save(agent.sess, agent.checkpoint_path)
+
+        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
+                                                                                  agent.loss_val))
+
+    pickle.dump(list_rewards, open("ram_seaquest_test.p", "wb"))
+    plt.plot(list_rewards)
+    plt.show()
