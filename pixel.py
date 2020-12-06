@@ -225,7 +225,6 @@ with agent.sess:
             # train model every X frames (frame skipping)
             if i % frame_skip_rate == 0:
                 agent.train((state, action, next_state, reward, done), priority_scale=0.8)
-            env.render()
 
             state = next_state
             total_reward += reward
