@@ -70,8 +70,8 @@ class QLearningAgent():
         self.discount_rate = 0.99
         self.checkpoint_path = "./checkpoints/ram/seaquest_ram.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
-        self.epsilon = 1.0
-        self.epsilon_decay = 0.995
+        self.epsilon = self.max_epsilon = 1.0
+        self.final_exploration_frame = 5000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
         self.replay_buffer = PrioritizedReplayBuffer(maxlen=1000)  # exerience buffe
@@ -137,7 +137,7 @@ class QLearningAgent():
     """ ------- CHOOSING AN ACTION -------"""
     def get_action(self, state):
         q_values = self.main_q_values.eval(feed_dict={self.X_state: [state]})
-        self.epsilon = max(self.min_epsilon, self.epsilon*self.epsilon_decay)  # slowly decrease epsilon
+        self.epsilon = max(self.min_epsilon, self.max_epsilon - ((self.max_epsilon - self.min_epsilon)/self.final_exploration_frame)*self.global_step.eval())  # slowly decrease epsilon
 
         if np.random.rand() < self.epsilon:
             return np.random.randint(self.action_size)  # choose random action
