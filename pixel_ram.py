@@ -140,7 +140,7 @@ class QLearningAgent():
             final_cnn = tf.layers.dense(flatten, 512, activation=tf.nn.relu, kernel_initializer=initializer)
             ram_layer = tf.layers.dense(ram_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
             ram_layer = tf.layers.dense(ram_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
-            concat = tf.layers.ConcatLayer([final_cnn, ram_layer])
+            concat = tf.concat([final_cnn, ram_layer], 1)
 
             output = tf.layers.dense(concat, self.action_size, kernel_initializer=initializer)
 
@@ -207,6 +207,7 @@ with agent.sess:
             pixel_next_state, reward, done, info = env.step(action)
             pixel_next_state = prep_obs(pixel_next_state)
             ram_next_state = env.unwrapped._get_ram()
+            reward = np.sign(reward)
 
             if i % frame_skip_rate == 0:
                 agent.train((pixel_state, ram_state, action, pixel_next_state, ram_next_state, reward, done), priority_scale=0.8)
