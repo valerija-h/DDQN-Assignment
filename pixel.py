@@ -88,8 +88,8 @@ class QLearningAgent():
         self.discount_rate = 0.99
         self.checkpoint_path = "./pixel_seaquest_test.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
-        self.epsilon = 1.0
-        self.epsilon_decay = 0.995
+        self.epsilon = self.max_epsilon = 1.0
+        self.final_exploration_frame = 5000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
         self.replay_buffer = PrioritizedReplayBuffer(maxlen=5000)  # exerience buffer
@@ -164,7 +164,7 @@ class QLearningAgent():
     def get_action(self, state):
         q_values = self.main_q_values.eval(feed_dict={self.X_state: [state]})
 
-        self.epsilon = max(self.min_epsilon, self.epsilon*self.epsilon_decay)  # slowly decrease epsilon
+        self.epsilon = max(self.min_epsilon, self.max_epsilon - ((self.max_epsilon - self.min_epsilon)/self.final_exploration_frame)*self.global_step.eval())  # slowly decrease epsilon
 
         if np.random.rand() < self.epsilon:
             return np.random.randint(self.action_size)  # choose random action
@@ -192,11 +192,8 @@ class QLearningAgent():
         self.replay_buffer.set_priorities(indices, self.error_val)
 
 agent = QLearningAgent(env)
-episodes = 50  # number of episodes
-if os.path.isfile("pixel_seaquest_test.p"):
-    list_rewards = []
-else:
-    list_rewards = pickle.load(open("pixel_seaquest_test.p", "rb"))
+episodes = 100  # number of episodes
+list_rewards = []
 total_reward = 0  # reward per episode
 copy_steps = 500  # update target network (from main network) every n steps
 save_steps = 1000  # save model every n steps
