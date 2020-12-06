@@ -128,8 +128,11 @@ class QLearningAgent():
         initializer = tf.variance_scaling_initializer()
 
         with tf.variable_scope(name) as scope:
-            prev_layer = tf.layers.dense(prev_layer, 24, activation=tf.nn.relu, kernel_initializer=initializer)
-            prev_layer = tf.layers.dense(prev_layer, 24, activation=tf.nn.relu, kernel_initializer=initializer)
+            # Same as big_ram model from https://arxiv.org/pdf/1605.01335.pdf
+            prev_layer = tf.layers.dense(prev_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
+            prev_layer = tf.layers.dense(prev_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
+            prev_layer = tf.layers.dense(prev_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
+            prev_layer = tf.layers.dense(prev_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
             output = tf.layers.dense(prev_layer, self.action_size, kernel_initializer=initializer)
 
         # create a dictionary of trainable vars by their name
