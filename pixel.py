@@ -14,8 +14,8 @@ import pickle
 """
 LOADING AND OBSERVING THE ENVIRONMENT
 """
-# load the environment (that uses pixel images)
-env_name = "Seaquest-v0"
+# load the environment (that uses pixel images) without stochastic frame skipping
+env_name = "SeaquestNoFrameskip-v4"
 env = gym.make(env_name)
 
 # examine the observation space and action space
@@ -81,7 +81,7 @@ class PrioritizedReplayBuffer():
 CREATING THE AGENT
 """
 class QLearningAgent():
-    def __init__(self, env):
+    def __init__(self, env, params):
         self.action_size = env.action_space.n
         self.observation_size = (96, 80, 1)
         self.learning_rate = 0.00025  # higher for experience replay
@@ -89,11 +89,11 @@ class QLearningAgent():
         self.checkpoint_path = "./checkpoints/pixel/seaquest_pixel.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
         self.epsilon = self.max_epsilon = 1.0
-        self.final_exploration_frame = 100000
+        self.final_exploration_frame = 10000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
         self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffer
-        self.tau = 0.05
+        self.tau = 0.001
 
         tf.reset_default_graph()
         tf.disable_eager_execution()
@@ -106,9 +106,11 @@ class QLearningAgent():
 
         # update the target network to have same weights of the main network
         # loop through each item in 'target_vars' and grab a list of the values we are going to change - this is the operations list
-        self.copy_ops_hard = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
-        self.copy_ops_soft = [targ_var.assign(targ_var * (1. - self.tau) + self.main_vars[targ_name] * self.tau) for targ_name, targ_var in self.target_vars.items()]
-        self.copy_online_to_target = tf.group(*self.copy_ops_soft)  # group to apply the operations list
+        if params['hard'] == True:
+            self.copy_ops = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
+        else:
+            self.copy_ops = [targ_var.assign(targ_var * (1. - self.tau) + self.main_vars[targ_name] * self.tau) for targ_name, targ_var in self.target_vars.items()]
+        self.copy_online_to_target = tf.group(*self.copy_ops)  # group to apply the operations list
 
         # we create the model for training
         with tf.variable_scope("train"):
@@ -193,50 +195,53 @@ class QLearningAgent():
         importance = (importance**(1-self.epsilon)).reshape((importance.shape[0],))
         feed = {self.X_state: np.array(state), self.X_action: np.array(action), self.y: y_val, self.importance: importance}
         _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.error], feed_dict=feed)
-        print(self.loss_val)
         self.replay_buffer.set_priorities(indices, self.error_val)
 
+def run_model(params):
+    results = {'rewards':[], 'losses':[]}
+    agent = QLearningAgent(env, params)
+    episodes = 100  # number of episodes
+    copy_steps = 100  # update target network (from main network) every n steps
+    save_steps = 1000  # save model every n steps
 
-agent = QLearningAgent(env)
-episodes = 1000  # number of episodes
-list_rewards = []
-total_reward = 0  # reward per episode
-copy_steps = 1000  # update target network (from main network) every n steps
-save_steps = 1000  # save model every n steps
+    with agent.sess:
+        for e in range(episodes):
+            state = prep_obs(env.reset())
+            done = False
+            total_reward = 0
+            losses = []
+            i = 0  # iterator to keep track of steps per episode - for frame skipping and avg loss
+            while not done:
+                step = agent.global_step.eval()
 
-with agent.sess:
-    for e in range(episodes):
-        state = prep_obs(env.reset())
-        done = False
-        list_rewards.append(total_reward)
-        total_reward = 0
-        i = 0  # iterator to keep track of steps per episode - for frame skipping and avg loss
-        while not done:
-            step = agent.global_step.eval()
+                action = agent.get_action(state)
+                next_state, reward, done, info = env.step(action)
+                next_state = prep_obs(next_state)
+                reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
-            action = agent.get_action(state)
-            next_state, reward, done, info = env.step(action)
-            next_state = prep_obs(next_state)
-            reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
+                agent.train((state, action, next_state, reward, done), priority_scale=0.8)
+                env.render()
+                state = next_state
+                total_reward += reward
+                losses.append(agent.loss_val)
 
-            agent.train((state, action, next_state, reward, done), priority_scale=0.8)
-            env.render()
-            state = next_state
-            total_reward += reward
+                # regulary update target DQN - every n steps
+                if step % copy_steps == 0:
+                    agent.copy_online_to_target.run()
 
-            # regulary update target DQN - every n steps
-            if step % copy_steps == 0:
-                agent.copy_online_to_target.run()
+                # save model regularly - every n steps
+                if step % save_steps == 0:
+                    agent.saver.save(agent.sess, agent.checkpoint_path)
 
-            # save model regularly - every n steps
-            if step % save_steps == 0:
-                agent.saver.save(agent.sess, agent.checkpoint_path)
+                i += 1
+            results['rewards'].append(total_reward)  # total reward per episode
+            results['losses'].append(sum(losses)/len(losses))   # average loss per episode
+            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}\tAvg Loss: {:.5f}".format(e + 1, episodes, step, total_reward, sum(losses)/len(losses)))
 
-            i += 1
+        pickle.dump(results, open("results/pixel/pixel_seaquest_"+params['hard'], "wb"))
+        plt.plot(results)
+        plt.show()
 
-        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
-                                                                                  agent.loss_val))
-
-    pickle.dump(list_rewards, open("pixel_seaquest_test.p", "wb"))
-    plt.plot(list_rewards)
-    plt.show()
+params = {'hard':[True, False]}
+for h in params['hard']:
+    run_model({'hard': h})
