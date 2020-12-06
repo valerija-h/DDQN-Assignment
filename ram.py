@@ -182,6 +182,7 @@ with agent.sess:
             action = agent.get_action(state)
             next_state, reward, done, info = env.step(action)
             next_state = next_state
+            reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
             agent.train((state, action, next_state, reward, done), priority_scale=0.8)
             env.render()

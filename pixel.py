@@ -119,7 +119,9 @@ class QLearningAgent():
 
             # used to make the target of q table close to real value
             self.error = self.y - self.q_value
-            self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
+            # TODO - importance sampling with huber loss ask
+            self.loss = tf.reduce_mean(tf.multiply(tf.losses.huber_loss(self.y, self.q_value, reduction='none'), self.importance))
+            # self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
             # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
 
             # global step to remember the number of times the optimizer was used
@@ -189,6 +191,7 @@ class QLearningAgent():
         importance = (importance**(1-self.epsilon)).reshape((importance.shape[0],))
         feed = {self.X_state: np.array(state), self.X_action: np.array(action), self.y: y_val, self.importance: importance}
         _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.error], feed_dict=feed)
+        print(self.loss_val)
         self.replay_buffer.set_priorities(indices, self.error_val)
 
 agent = QLearningAgent(env)
@@ -204,11 +207,14 @@ with agent.sess:
         done = False
         list_rewards.append(total_reward)
         total_reward = 0
+        i = 0  # iterator to keep track of steps per episode - for frame skipping and avg loss
         while not done:
             step = agent.global_step.eval()
+
             action = agent.get_action(state)
             next_state, reward, done, info = env.step(action)
             next_state = prep_obs(next_state)
+            reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
             agent.train((state, action, next_state, reward, done), priority_scale=0.8)
             env.render()
@@ -224,6 +230,8 @@ with agent.sess:
             # save model regularly - every n steps
             if step % save_steps == 0:
                 agent.saver.save(agent.sess, agent.checkpoint_path)
+
+            i += 1
 
         print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
                                                                                   agent.loss_val))
