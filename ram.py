@@ -177,6 +177,7 @@ list_rewards = []
 total_reward = 0  # reward per episode
 copy_steps = 500  # update target network (from main network) every n steps
 save_steps = 1000  # save model every n ste
+frame_skip_rate = 4
 
 with agent.sess:
     for e in range(episodes):
@@ -184,14 +185,21 @@ with agent.sess:
         done = False
         list_rewards.append(total_reward)
         total_reward = 0
+        i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
+        action = 0
         while not done:
             step = agent.global_step.eval()
-            action = agent.get_action(state)
+
+            if i % frame_skip_rate == 0:
+                action = agent.get_action(state)
+
             next_state, reward, done, info = env.step(action)
             next_state = next_state
             reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
-            agent.train((state, action, next_state, reward, done), priority_scale=0.8)
+            if i % frame_skip_rate == 0:
+                agent.train((state, action, next_state, reward, done), priority_scale=0.8)
+                
             env.render()
             state = next_state
             total_reward += reward
