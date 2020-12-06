@@ -16,9 +16,7 @@ LOADING AND OBSERVING THE ENVIRONMENT
 """
 # load the environment (that uses pixel images)
 env_name_pixel = "Seaquest-v0"
-env_name_ram = "Seaquest-ram-v0"
-env_pixel = gym.make(env_name_pixel)
-env_ram = gym.make(env_name_ram)
+env = gym.make(env_name_pixel)
 
 """
 PREPROCESSING THE OBSERVATIONS
@@ -68,8 +66,8 @@ class PrioritizedReplayBuffer():
 CREATING THE AGENT
 """
 class QLearningAgent():
-    def __init__(self, env_pixel, env_ram):
-        self.action_size = env_pixel.action_space.n
+    def __init__(self, env):
+        self.action_size = env.action_space.n
         self.learning_rate = 0.00025  # higher for experience replay
         self.discount_rate = 0.95
         self.checkpoint_path = "./checkpoints/both/seaquest_both.ckpt"  # where to save model checkpoints
@@ -107,7 +105,6 @@ class QLearningAgent():
             # used to make the target of q table close to real value
             self.error = self.y - self.q_value
             self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
-            # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
 
             # global step to remember the number of times the optimizer was used
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -142,7 +139,7 @@ class QLearningAgent():
             flatten = tf.reshape(prev_layer, shape=[-1, 64 * 12 * 10])
             final_cnn = tf.layers.dense(flatten, 512, activation=tf.nn.relu, kernel_initializer=initializer)
 
-            concat = tf.concat([final_cnn, ram_layer], 1)  # TODO ask which dimension to concat
+            concat = tf.concat([final_cnn, ram_layer], 1)
 
             output = tf.layers.dense(concat, self.action_size, kernel_initializer=initializer)
 
@@ -184,30 +181,36 @@ class QLearningAgent():
         _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.error], feed_dict=feed)
         self.replay_buffer.set_priorities(indices, self.error_val)
 
-agent = QLearningAgent(env_pixel, env_ram)
+agent = QLearningAgent(env)
 episodes = 1000  # number of episodes
 list_rewards = []
 total_reward = 0  # reward per episode
 copy_steps = 1000  # update target network (from main network) every n steps
 save_steps = 1000  # save model every n ste
+frame_skip_rate = 4
 
 with agent.sess:
     for e in range(episodes):
-        pixel_state = prep_obs(env_pixel.reset())
-        ram_state = env_ram.reset()
+        pixel_state = prep_obs(env.reset())
+        ram_state = env.unwrapped._get_ram()
         done = False
         list_rewards.append(total_reward)
+        i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
         total_reward = 0
+        action = 0
         while not done:
             step = agent.global_step.eval()
 
-            action = agent.get_action(pixel_state, ram_state)
-            pixel_next_state, reward, done, info = env_pixel.step(action)
+            if i % frame_skip_rate == 0:
+                action = agent.get_action(pixel_state, ram_state)
+
+            pixel_next_state, reward, done, info = env.step(action)
             pixel_next_state = prep_obs(pixel_next_state)
-            ram_next_state, _, _, _ = env_ram.step(action)
+            ram_next_state = env.unwrapped._get_ram()
 
+            if i % frame_skip_rate == 0:
+                agent.train((pixel_state, ram_state, action, pixel_next_state, ram_next_state, reward, done), priority_scale=0.8)
 
-            agent.train((pixel_state, ram_state, action, pixel_next_state, ram_next_state, reward, done), priority_scale=0.8)
             pixel_state = pixel_next_state
             ram_state = ram_next_state
             total_reward += reward
@@ -219,6 +222,8 @@ with agent.sess:
             # save model regularly - every n steps
             if step % save_steps == 0:
                 agent.saver.save(agent.sess, agent.checkpoint_path)
+
+            i += 1
 
         print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
                                                                                   agent.loss_val))
