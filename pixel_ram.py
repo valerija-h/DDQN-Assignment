@@ -15,7 +15,7 @@ import time
 LOADING AND OBSERVING THE ENVIRONMENT
 """
 # load the environment (that uses pixel images)
-env_name_pixel = "Seaquest-v0"
+env_name_pixel = "SeaquestNoFrameskip-v4"
 env = gym.make(env_name_pixel)
 
 """

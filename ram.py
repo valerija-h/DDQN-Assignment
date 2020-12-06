@@ -14,7 +14,7 @@ from collections import deque
 LOADING AND OBSERVING THE ENVIRONMENT
 """
 # load the environment (that uses pixel images)
-env_name = "Seaquest-ram-v0"
+env_name = "SeaquestNoFrameskip-v4"
 env = gym.make(env_name)
 
 # examine the observation space and action space
@@ -182,6 +182,7 @@ frame_skip_rate = 4
 with agent.sess:
     for e in range(episodes):
         state = env.reset()
+        state = env.unwrapped._get_ram()
         done = False
         total_reward = 0
         i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
@@ -193,7 +194,7 @@ with agent.sess:
                 action = agent.get_action(state)
 
             next_state, reward, done, info = env.step(action)
-            next_state = next_state
+            next_state = env.unwrapped._get_ram()
             reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
             if i % frame_skip_rate == 0:

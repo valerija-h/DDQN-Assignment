@@ -81,7 +81,7 @@ class PrioritizedReplayBuffer():
 CREATING THE AGENT
 """
 class QLearningAgent():
-    def __init__(self, env, params):
+    def __init__(self, env):
         self.action_size = env.action_space.n
         self.observation_size = (96, 80, 1)
         self.learning_rate = 0.00025  # higher for experience replay
@@ -106,10 +106,7 @@ class QLearningAgent():
 
         # update the target network to have same weights of the main network
         # loop through each item in 'target_vars' and grab a list of the values we are going to change - this is the operations list
-        if params['hard'] == True:
-            self.copy_ops = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
-        else:
-            self.copy_ops = [targ_var.assign(targ_var * (1. - self.tau) + self.main_vars[targ_name] * self.tau) for targ_name, targ_var in self.target_vars.items()]
+        self.copy_ops = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
         self.copy_online_to_target = tf.group(*self.copy_ops)  # group to apply the operations list
 
         # we create the model for training
@@ -197,58 +194,54 @@ class QLearningAgent():
         _, self.loss_val, self.error_val = self.sess.run([self.training_op, self.loss, self.error], feed_dict=feed)
         self.replay_buffer.set_priorities(indices, self.error_val)
 
-def run_model(params):
-    agent = QLearningAgent(env, params)
-    episodes = 500  # number of episodes
-    copy_steps = 10000  # update target network (from main network) every n steps
-    if params['hard'] is True: copy_steps *= 10
-    save_steps = 10000  # save model every n steps
-    list_rewards = []
-    frame_skip_rate = 4
 
-    with agent.sess:
-        for e in range(episodes):
-            state = prep_obs(env.reset())
-            done = False
-            total_reward = 0
-            losses = []
-            i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
-            action = 0  # do nothing at start - no states yet
-            while not done:
-                step = agent.global_step.eval()
+agent = QLearningAgent(env)
+episodes = 500  # number of episodes
+copy_steps = 10000  # update target network (from main network) every n steps
+save_steps = 10000  # save model every n steps
+list_rewards = []
+frame_skip_rate = 4
 
-                # get a new action every X frames (frame skipping)
-                if i % frame_skip_rate == 0:
-                    action = agent.get_action(state)
+with agent.sess:
+    for e in range(episodes):
+        state = prep_obs(env.reset())
+        done = False
+        total_reward = 0
+        losses = []
+        i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
+        action = 0  # do nothing at start - no states yet
+        while not done:
+            step = agent.global_step.eval()
 
-                # get outcome of action - perform last action for X steps
-                next_state, reward, done, info = env.step(action)
-                next_state = prep_obs(next_state)
-                reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
+            # get a new action every X frames (frame skipping)
+            if i % frame_skip_rate == 0:
+                action = agent.get_action(state)
 
-                # train model every X frames (frame skipping)
-                if i % frame_skip_rate == 0:
-                    agent.train((state, action, next_state, reward, done), priority_scale=0.8)
-                env.render()
+            # get outcome of action - perform last action for X steps
+            next_state, reward, done, info = env.step(action)
+            next_state = prep_obs(next_state)
+            reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
-                state = next_state
-                total_reward += reward
+            # train model every X frames (frame skipping)
+            if i % frame_skip_rate == 0:
+                agent.train((state, action, next_state, reward, done), priority_scale=0.8)
+            env.render()
 
-                # regulary update target DQN - every n steps
-                if step % copy_steps == 0:
-                    agent.copy_online_to_target.run()
+            state = next_state
+            total_reward += reward
 
-                # save model regularly - every n steps
-                if step % save_steps == 0:
-                    agent.saver.save(agent.sess, agent.checkpoint_path)
+            # regulary update target DQN - every n steps
+            if step % copy_steps == 0:
+                agent.copy_online_to_target.run()
 
-                i += 1
-            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}".format(e + 1, episodes, step, total_reward))
-            list_rewards.append(total_reward)
-            pickle.dump(list_rewards, open("results/pixel/pixel_seaquest_"+str(params['hard'])+".p", "wb"))
-        plt.plot(list_rewards)
-        plt.show()
+            # save model regularly - every n steps
+            if step % save_steps == 0:
+                agent.saver.save(agent.sess, agent.checkpoint_path)
 
-params = {'hard':[True, False]}
-for h in params['hard']:
-    run_model({'hard': h})
+            i += 1
+        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}".format(e + 1, episodes, step, total_reward))
+        list_rewards.append(total_reward)
+        pickle.dump(list_rewards, open("pixel_seaquest_test.p", "wb"))
+
+plt.plot(list_rewards)
+plt.show()
