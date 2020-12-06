@@ -203,6 +203,7 @@ def run_model(params):
     episodes = 100  # number of episodes
     copy_steps = 100  # update target network (from main network) every n steps
     save_steps = 1000  # save model every n steps
+    frame_skip_rate = 4
 
     with agent.sess:
         for e in range(episodes):
@@ -210,17 +211,25 @@ def run_model(params):
             done = False
             total_reward = 0
             losses = []
-            i = 0  # iterator to keep track of steps per episode - for frame skipping and avg loss
+            i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
+            action = 0  # do nothing at start - no states yet
             while not done:
                 step = agent.global_step.eval()
 
-                action = agent.get_action(state)
+                # get a new action every X frames (frame skipping)
+                if i % frame_skip_rate == 0:
+                    action = agent.get_action(state)
+
+                # get outcome of action - perform last action for X steps
                 next_state, reward, done, info = env.step(action)
                 next_state = prep_obs(next_state)
                 reward = np.sign(reward)  # in reward clipping all positive rewards are +1 and all negative is -1
 
-                agent.train((state, action, next_state, reward, done), priority_scale=0.8)
+                # train model every X frames (frame skipping)
+                if i % frame_skip_rate == 0:
+                    agent.train((state, action, next_state, reward, done), priority_scale=0.8)
                 env.render()
+
                 state = next_state
                 total_reward += reward
                 losses.append(agent.loss_val)
@@ -234,6 +243,7 @@ def run_model(params):
                     agent.saver.save(agent.sess, agent.checkpoint_path)
 
                 i += 1
+
             results['rewards'].append(total_reward)  # total reward per episode
             results['losses'].append(sum(losses)/len(losses))   # average loss per episode
             print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}\tAvg Loss: {:.5f}".format(e + 1, episodes, step, total_reward, sum(losses)/len(losses)))
