@@ -92,7 +92,7 @@ class QLearningAgent():
         self.final_exploration_frame = 10000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
-        self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffer
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=10000)  # exerience buffer
         self.tau = 0.001
 
         tf.reset_default_graph()
@@ -198,11 +198,12 @@ class QLearningAgent():
         self.replay_buffer.set_priorities(indices, self.error_val)
 
 def run_model(params):
-    results = {'rewards':[], 'losses':[]}
     agent = QLearningAgent(env, params)
-    episodes = 100  # number of episodes
+    episodes = 50  # number of episodes
     copy_steps = 100  # update target network (from main network) every n steps
+    if params['hard'] is True: copy_steps *= 10
     save_steps = 1000  # save model every n steps
+    list_rewards = []
     frame_skip_rate = 4
 
     with agent.sess:
@@ -232,7 +233,6 @@ def run_model(params):
 
                 state = next_state
                 total_reward += reward
-                losses.append(agent.loss_val)
 
                 # regulary update target DQN - every n steps
                 if step % copy_steps == 0:
@@ -243,13 +243,10 @@ def run_model(params):
                     agent.saver.save(agent.sess, agent.checkpoint_path)
 
                 i += 1
-
-            results['rewards'].append(total_reward)  # total reward per episode
-            results['losses'].append(sum(losses)/len(losses))   # average loss per episode
-            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}\tAvg Loss: {:.5f}".format(e + 1, episodes, step, total_reward, sum(losses)/len(losses)))
-
-        pickle.dump(results, open("results/pixel/pixel_seaquest_"+params['hard'], "wb"))
-        plt.plot(results)
+            print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}".format(e + 1, episodes, step, total_reward))
+            list_rewards.append(total_reward)
+            pickle.dump(list_rewards, open("results/pixel/pixel_seaquest_"+str(params['hard'])+".p", "wb"))
+        plt.plot(list_rewards)
         plt.show()
 
 params = {'hard':[True, False]}
