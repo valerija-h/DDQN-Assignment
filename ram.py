@@ -68,7 +68,7 @@ class QLearningAgent():
         self.action_size = env.action_space.n
         self.learning_rate = 0.001
         self.discount_rate = 0.99
-        self.checkpoint_path = "./pixel_seaquest_ram.ckpt"  # where to save model checkpoints
+        self.checkpoint_path = "./checkpoints/ram/seaquest_ram.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
         self.epsilon = 1.0
         self.epsilon_decay = 0.995
