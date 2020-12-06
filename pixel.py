@@ -32,7 +32,7 @@ PREPROCESSING THE OBSERVATIONS
 """
 def prep_obs(obs):
     img = obs[1:192:2, ::2]
-    img = img.mean(axis=2)  # convert to grayscale (values between 0 and 255)
+    img = img.mean(axis=2).astype(np.uint8)  # convert to grayscale (values between 0 and 255)
     return img.reshape(96, 80, 1)
 
 obs = env.reset()
