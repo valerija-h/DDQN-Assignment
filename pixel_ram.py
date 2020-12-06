@@ -138,8 +138,9 @@ class QLearningAgent():
                                           activation=tf.nn.relu, kernel_initializer=initializer)
             flatten = tf.reshape(prev_layer, shape=[-1, 64 * 12 * 10])
             final_cnn = tf.layers.dense(flatten, 512, activation=tf.nn.relu, kernel_initializer=initializer)
-
-            concat = tf.concat([final_cnn, ram_layer], 1)
+            ram_layer = tf.layers.dense(ram_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
+            ram_layer = tf.layers.dense(ram_layer, 128, activation=tf.nn.relu, kernel_initializer=initializer)
+            concat = tf.layers.ConcatLayer([final_cnn, ram_layer])
 
             output = tf.layers.dense(concat, self.action_size, kernel_initializer=initializer)
 
@@ -182,11 +183,11 @@ class QLearningAgent():
         self.replay_buffer.set_priorities(indices, self.error_val)
 
 agent = QLearningAgent(env)
-episodes = 1000  # number of episodes
+episodes = 500  # number of episodes
 list_rewards = []
 total_reward = 0  # reward per episode
-copy_steps = 1000  # update target network (from main network) every n steps
-save_steps = 1000  # save model every n ste
+copy_steps = 10000  # update target network (from main network) every n steps
+save_steps = 10000  # save model every n ste
 frame_skip_rate = 4
 
 with agent.sess:
@@ -194,7 +195,6 @@ with agent.sess:
         pixel_state = prep_obs(env.reset())
         ram_state = env.unwrapped._get_ram()
         done = False
-        list_rewards.append(total_reward)
         i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
         total_reward = 0
         action = 0
@@ -225,9 +225,9 @@ with agent.sess:
 
             i += 1
 
-        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
-                                                                                  agent.loss_val))
+        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {}".format(e + 1, episodes, step, total_reward))
+        list_rewards.append(total_reward)
 
-    pickle.dump(list_rewards, open("pixel_ram__seaquest_test.p", "wb"))
+    pickle.dump(list_rewards, open("pixel_ram_seaquest_test.p", "wb"))
     plt.plot(list_rewards)
     plt.show()

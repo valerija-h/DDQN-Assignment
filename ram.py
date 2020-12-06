@@ -172,18 +172,17 @@ class QLearningAgent():
 
 
 agent = QLearningAgent(env)
-episodes = 1000  # number of episodes
+episodes = 500  # number of episodes
 list_rewards = []
 total_reward = 0  # reward per episode
-copy_steps = 500  # update target network (from main network) every n steps
-save_steps = 1000  # save model every n ste
+copy_steps = 10000  # update target network (from main network) every n steps
+save_steps = 10000  # save model every n ste
 frame_skip_rate = 4
 
 with agent.sess:
     for e in range(episodes):
         state = env.reset()
         done = False
-        list_rewards.append(total_reward)
         total_reward = 0
         i = 1  # iterator to keep track of steps per episode - for frame skipping and avg loss
         action = 0
@@ -214,8 +213,8 @@ with agent.sess:
 
             i += 1
 
-        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},\tLoss: {}".format(e + 1, episodes, step, total_reward,
-                                                                                  agent.loss_val))
+        print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},".format(e + 1, episodes, step, total_reward))
+        list_rewards.append(total_reward)
 
     pickle.dump(list_rewards, open("ram_seaquest_test.p", "wb"))
     plt.plot(list_rewards)

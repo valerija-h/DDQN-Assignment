@@ -89,10 +89,10 @@ class QLearningAgent():
         self.checkpoint_path = "./checkpoints/pixel/seaquest_pixel.ckpt"  # where to save model checkpoints
         self.min_epsilon = 0.1  # make sure it will never go below 0.1
         self.epsilon = self.max_epsilon = 1.0
-        self.final_exploration_frame = 10000
+        self.final_exploration_frame = 100000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
-        self.replay_buffer = PrioritizedReplayBuffer(maxlen=10000)  # exerience buffer
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffer
         self.tau = 0.001
 
         tf.reset_default_graph()
@@ -199,10 +199,10 @@ class QLearningAgent():
 
 def run_model(params):
     agent = QLearningAgent(env, params)
-    episodes = 50  # number of episodes
-    copy_steps = 100  # update target network (from main network) every n steps
+    episodes = 500  # number of episodes
+    copy_steps = 10000  # update target network (from main network) every n steps
     if params['hard'] is True: copy_steps *= 10
-    save_steps = 1000  # save model every n steps
+    save_steps = 10000  # save model every n steps
     list_rewards = []
     frame_skip_rate = 4
 
