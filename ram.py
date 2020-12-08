@@ -122,7 +122,7 @@ class QLearningAgent():
             self.sess.run(self.copy_online_to_target)
 
     """
-    CREATING THE CNN NETWORK
+    CREATING THE DENSE NETWORK
     """
     def create_model(self, X_state, name):
         prev_layer = X_state / 255.0  # scale pixel intensities to the [0, 1.0] range.
