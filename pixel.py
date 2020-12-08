@@ -163,7 +163,9 @@ class QLearningAgent():
     def get_action(self, state):
         q_values = self.main_q_values.eval(feed_dict={self.X_state: [state]})
 
-        self.epsilon = max(self.min_epsilon, self.max_epsilon - ((self.max_epsilon - self.min_epsilon)/self.final_exploration_frame)*self.global_step.eval())  # slowly decrease epsilon
+        # slowly decrease epsilon
+        self.epsilon = max(self.min_epsilon, self.max_epsilon - ((self.max_epsilon - self.min_epsilon)/
+                                                                 self.final_exploration_frame)*self.global_step.eval())
 
         if np.random.rand() < self.epsilon:
             return np.random.randint(self.action_size)  # choose random action
