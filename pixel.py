@@ -92,7 +92,7 @@ class QLearningAgent():
         self.final_exploration_frame = 100000
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
-        self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffer
+        self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # experience buffer
         self.tau = 0.001
 
         tf.reset_default_graph()
@@ -101,11 +101,10 @@ class QLearningAgent():
         # observation variable - takes shape 96 by 80
         self.X_state = tf.placeholder(tf.float32, shape=[None, 96, 80, 1])
         # create two deep neural network - one for main model one for target model
-        self.main_q_values, self.main_vars = self.create_model(self.X_state, name="main")  # main learns from target then target gets updated to main
-        self.target_q_values, self.target_vars = self.create_model(self.X_state, name="target")  # we will use the main network to update this one
+        self.main_q_values, self.main_vars = self.create_model(self.X_state, name="main")
+        self.target_q_values, self.target_vars = self.create_model(self.X_state, name="target")
 
-        # update the target network to have same weights of the main network
-        # loop through each item in 'target_vars' and grab a list of the values we are going to change - this is the operations list
+        # update the target network to have the same weights as the main network
         self.copy_ops = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
         self.copy_online_to_target = tf.group(*self.copy_ops)  # group to apply the operations list
 
@@ -118,17 +117,14 @@ class QLearningAgent():
 
             self.q_value = tf.reduce_sum(self.main_q_values * tf.one_hot(self.X_action, self.action_size), axis=1)
 
-            # used to make the target of q table close to real value
+            # calculate error and loss function
             self.error = self.y - self.q_value
-            # TODO - importance sampling with huber loss ask
             self.loss = tf.reduce_mean(tf.multiply(tf.losses.huber_loss(self.y, self.q_value, reduction='none'), self.importance))
-            # self.loss = tf.reduce_mean(tf.multiply(tf.square(self.error), self.importance))
-            # an alternative to above would just be error squared - to avoid exploiding we use linear error and clipping (this is an optimization)
 
             # global step to remember the number of times the optimizer was used
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
             self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
-            # to take the optimizer and tell it to minimize the loss, the function will also add +1 to global_step at each iteration
+            # tell optimizer to minimize loss, the function will also add +1 to global_step at each iteration
             self.training_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
 
         # saving the session - if u close the notebook it will load back the previous model

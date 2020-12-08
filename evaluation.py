@@ -34,7 +34,7 @@ def show_result(filename, title, colour):
     mean = sum(data)/len(data)
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    fig.suptitle(title, fontsize=16)
+    # fig.suptitle(title, fontsize=16)
     ax.plot(data, colour)
     ax.plot([0, 500], [mean, mean], 'k:', lw=3, label='Mean Total Reward: %0.3f' % mean)
     ax.set_ylabel('Total Reward')
@@ -58,10 +58,10 @@ def get_avg(data):
 
 def show_all_results(all_data):
     fig, ax = plt.subplots(figsize=(15, 5))
-    fig.suptitle('Total Reward per Episode (all models)', fontsize=16)
-    ax.plot(all_data[0], 'b', label='RAM - Mean Total Reward: %0.3f' % get_avg(all_data[0]))
-    ax.plot(all_data[1], 'g', label='Pixel - Mean Total Reward: %0.3f' % get_avg(all_data[1]))
-    ax.plot(all_data[2], 'm', label='Pixel and RAM - Mean Total Reward: %0.3f' % get_avg(all_data[2]))
+    # fig.suptitle('Total Reward per Episode (all models)', fontsize=16)
+    ax.plot(all_data[0], '-bo', lw=1, markersize=1, label='RAM - Mean Total Reward: %0.3f' % get_avg(all_data[0]))
+    ax.plot(all_data[1], '-go', lw=1, markersize=1, label='Pixel - Mean Total Reward: %0.3f' % get_avg(all_data[1]))
+    ax.plot(all_data[2], '-mo', lw=1, markersize=1, label='Pixel and RAM - Mean Total Reward: %0.3f' % get_avg(all_data[2]))
     # ax.plot([0, 500], [mean, mean], 'k:', lw=3, label='Mean Total Reward')
     ax.set_ylabel('Total Reward')
     ax.set_xlabel('Episodes')
