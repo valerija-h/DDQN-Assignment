@@ -125,8 +125,8 @@ class QLearningAgent():
     CREATING THE CNN NETWORK
     """
     def create_model(self, X_state_pixel, X_state_ram, name):
-        prev_layer = X_state_pixel / 255.0  # scale pixel intensities to the [-1.0, 1.0] range.
-        ram_layer = X_state_ram / 255.0  # scale pixel intensities to the [-1.0, 1.0] range.
+        prev_layer = X_state_pixel / 255.0  # scale pixel intensities to the [0, 1.0] range.
+        ram_layer = X_state_ram / 255.0  # scale pixel intensities to the [0, 1.0] range.
         initializer = tf.variance_scaling_initializer()
 
         with tf.variable_scope(name) as scope:
