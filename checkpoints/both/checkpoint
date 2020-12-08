@@ -1,0 +1,2 @@
+model_checkpoint_path: "seaquest_both.ckpt"
+all_model_checkpoint_paths: "seaquest_both.ckpt"

@@ -216,6 +216,6 @@ with agent.sess:
         print("\r\tEpisode: {}/{},\tStep: {}\tTotal Reward: {},".format(e + 1, episodes, step, total_reward))
         list_rewards.append(total_reward)
 
-        pickle.dump(list_rewards, open("ram_seaquest_test.p", "wb"))
+        pickle.dump(list_rewards, open("results/ram_seaquest_test.p", "wb"))
     plt.plot(list_rewards)
     plt.show()
