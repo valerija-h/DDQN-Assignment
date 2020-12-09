@@ -77,6 +77,7 @@ class QLearningAgent():
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
         self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffe
+        self.tau = 0.001
 
         tf.reset_default_graph()
         tf.disable_eager_execution()
@@ -89,9 +90,10 @@ class QLearningAgent():
         self.target_q_values, self.target_vars = self.create_model(self.X_state_pixel, self.X_state_ram, name="target")  # we will use the main network to update this one
 
         # update the target network to have same weights of the main network
-        # loop through each item in 'target_vars' and grab a list of the values we are going to change - this is the operations list
-        self.copy_ops = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
-        self.copy_online_to_target = tf.group(*self.copy_ops)  # group to apply the operations list
+        # update the target network to have the same weights as the main network
+        self.copy_ops_hard = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
+        self.copy_ops_soft = [targ_var.assign(targ_var * (1. - self.tau) + self.main_vars[targ_name] * self.tau) for targ_name, targ_var in self.target_vars.items()]
+        self.copy_online_to_target = tf.group(*self.copy_ops_hard)  # group to apply the operations list
 
         # we create the model for training
         with tf.variable_scope("train"):

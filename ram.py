@@ -76,7 +76,7 @@ class QLearningAgent():
         self.loss_val = np.infty  # initialize loss_val
         self.error_val = np.infty
         self.replay_buffer = PrioritizedReplayBuffer(maxlen=100000)  # exerience buffe
-        self.tau = 0.05
+        self.tau = 0.001
 
         tf.reset_default_graph()
         tf.disable_eager_execution()
