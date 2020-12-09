@@ -31,8 +31,11 @@ print('Info: {}'.format(info))
 PREPROCESSING THE OBSERVATIONS
 """
 def prep_obs(obs):
+    # cropping and sub-sampling
     img = obs[1:192:2, ::2]
-    img = img.mean(axis=2).astype(np.uint8)  # convert to grayscale (values between 0 and 255)
+    # convert to grayscale (values between 0 and 255) and convert to uint8
+    img = img.mean(axis=2).astype(np.uint8)
+    # reshape for tensorflow compatibility
     return img.reshape(96, 80, 1)
 
 obs = env.reset()
@@ -105,8 +108,9 @@ class QLearningAgent():
         self.target_q_values, self.target_vars = self.create_model(self.X_state, name="target")
 
         # update the target network to have the same weights as the main network
-        self.copy_ops = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
-        self.copy_online_to_target = tf.group(*self.copy_ops)  # group to apply the operations list
+        self.copy_ops_hard = [targ_var.assign(self.main_vars[targ_name]) for targ_name, targ_var in self.target_vars.items()]
+        self.copy_ops_soft = [targ_var.assign(targ_var * (1. - self.tau) + self.main_vars[targ_name] * self.tau) for targ_name, targ_var in self.target_vars.items()]
+        self.copy_online_to_target = tf.group(*self.copy_ops_hard)  # group to apply the operations list
 
         # we create the model for training
         with tf.variable_scope("train"):

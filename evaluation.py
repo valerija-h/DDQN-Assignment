@@ -71,4 +71,52 @@ def show_all_results(all_data):
     plt.savefig('images/all_models.png')
     plt.show()
 
-show_all_results(all_data)
+# show_all_results(all_data)
+#
+# import keras
+#
+# model = keras.models.Sequential()
+# model.add(keras.layers.Dense(128, activation='relu', input_shape=(None, 128)))
+# model.add(keras.layers.Dense(128, activation='relu'))
+# model.add(keras.layers.Dense(128, activation='relu'))
+# model.add(keras.layers.Dense(128, activation='relu'))
+# model.add(keras.layers.Dense(18))
+#
+# model = keras.models.Sequential()
+# model.add(keras.layers.Conv2D(32, kernel_size=8, strides=4, padding="SAME", activation='relu', input_shape=(None, 96, 80, 1)))
+# model.add(keras.layers.Conv2D(64, kernel_size=4, strides=4, padding="SAME",  activation='relu'))
+# model.add(keras.layers.Conv2D(64, kernel_size=3, strides=1, padding="SAME",  activation='relu'))
+# model.add(keras.layers.Reshape((-1, 64 * 12 * 10)))
+# model.add(keras.layers.Dense(512, activation='relu'))
+# model.add(keras.layers.Dense(18))
+#
+# print(model.summary())
+
+# model = keras.models.Sequential()
+# model.add(keras.layers.Conv2D(32, kernel_size=8, strides=4, padding="SAME", activation='relu', input_shape=(None, 96, 80, 1)))
+# model.add(keras.layers.Conv2D(64, kernel_size=4, strides=4, padding="SAME",  activation='relu'))
+# model.add(keras.layers.Conv2D(64, kernel_size=3, strides=1, padding="SAME",  activation='relu'))
+# model.add(keras.layers.Reshape((-1, 64 * 12 * 10)))
+# model.add(keras.layers.Dense(512, activation='relu'))
+#
+# model.add(keras.layers.Dense(128, activation='relu', input_shape=(None, 128)))
+# model.add(keras.layers.Dense(128, activation='relu'))
+#
+# model.add(keras.layers.concatenate())
+#
+# model.add(keras.layers.Dense(18))
+
+import keras
+x = np.arange(516).reshape(-1, 516)
+print(x)
+y = np.arange(128).reshape(-1, 128)
+print(y)
+print(keras.layers.Concatenate(axis=1)([x, y]))
+
+
+
+
+
+
+
+
